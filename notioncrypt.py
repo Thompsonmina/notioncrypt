@@ -1,3 +1,6 @@
+
+import sys
+
 from cryptography.fernet import Fernet, InvalidToken
 from decouple import config
 from notion_client import Client
@@ -9,10 +12,32 @@ from notion_client.errors import APIResponseError, APIErrorCode
 
 from pprint import pprint 
 
-from helpers import get_id, get_url
+from notioncrypt_functions import (
+	get_id, get_url, get_children_blocks, encryptcontent, decryptcontent,
+	create_new_page
+)
 
+
+def create_env():
+	token = input("NOTION_TOKEN: ")
+	key = input("ENCRYPT_KEY: ")
+	with open(".env", "w") as file:
+		file.write(f"NOTION_TOKEN={token}\n")
+		file.write(f"ENCRYPT_KEY={key}\n")
 
 def main():
+
+	if sys.argv[1:]:
+		if sys.argv[1] == "generate_key":
+			print(Fernet.generate_key())
+			exit()
+		elif sys.argv[1] == "create_env":
+			create_env()
+			exit()
+		else:
+			print("invalid argument passed")
+			exit()
+
 	token = config("NOTION_TOKEN", default=None)
 	key = config("ENCRYPT_KEY", default=None)
 
@@ -80,98 +105,4 @@ def main():
 
 	print(f"Operation successfull, check out {get_url(parent_id)}")
 
-
-
-def get_parentpage_details(client, pageid):
-	page = client.pages.retrieve(pageid)
-	if page["parent"]["type"] == "page_id":
-		parentid = page["parent"]["page_id"]
-		titles = [title["text"]["content"] for title in page["properties"]["title"]["title"]]
-		relevantinfo = {
-							"parent": {"page_id": parentid},
-							"properties": {
-								"title": [{"text": {
-											"content": title
-												}
-											} for title in titles]
-							}
-						}
-		return relevantinfo
-	return None	
-
-
-def create_new_page(client, plainpageID, childrenblocks):
-	if childrenblocks:
-		page_payload = get_parentpage_details(client, plainpageID)
-		
-		if page_payload:
-			page_payload["children"] = childrenblocks
-			client.pages.create(**page_payload)
-		else:
-			raise Exception("The parent of page is unsupported, can only handle pages that have pages as parents")
-		return page_payload["parent"]["page_id"] 
-
-
-def get_children_blocks(client, blockid, recursive=True):
- 	children = client.blocks.children.list(blockid).get("results", [])
- 	if recursive:
-	 	for block in children:
-	 		if block["has_children"]:
-	 			blocktype = block["type"]
-	 			block[blocktype]["children"] = getchildren(client, block["id"])
- 	return children
-
-
-def append_children_to_parentblock(client, blockid, children):
-	client.blocks.children.append(blockid, **{"children":children})
-
-def encryptcontent(blocks, fernetobject):
-	for block in blocks:
-		blocktype = block["type"]
-		for richtextobjects in block[blocktype]["text"]:
-			if richtextobjects["type"] == "text":
-				plaincontent = richtextobjects["text"]["content"]
-				encryptedcontent = fernetobject.encrypt(plaincontent.encode("utf-8"))
-				richtextobjects["text"]["content"] = encryptedcontent.decode()
-
-		if block["has_children"]:
-			block[blocktype]["children"] = encryptcontent(block[blocktype]["children"])
-
-
-	return blocks
-
-
-def decryptcontent(blocks, fernetobject):
-	for block in blocks:
-		blocktype = block["type"]
-		for richtextobjects in block[blocktype]["text"]:
-			if richtextobjects["type"] == "text":
-				encryptedcontent = richtextobjects["text"]["content"]
-				try:
-					plaincontent = fernetobject.decrypt(encryptedcontent.encode("utf-8"))
-				except InvalidToken:
-					raise
-				richtextobjects["text"]["content"] = plaincontent.decode()
-		
-		if block["has_children"]:
-			block[blocktype]["children"] = decryptcontent(block[blocktype]["children"])
-
-
-	return blocks
-
 main()
-# #oldPageID = "83f6fa134641491286c3b2de1d80d725"
-# plainpageid = "9cfbc91c1ca14dc7bffc2c1f8d80d4e2"
-
-# # b = get_children_blocks(notion, plainpageid)
-# # en = encryptcontent(b)
-# # print(en)
-# # #append_children_to_parentblock(notion, blockid, encryptcontent(get_children_blocks(notion, blockid)))
-# # #append_children_to_parentblock(notion, oldPageID, decryptcontent(get_children_blocks(notion, blockid)))
-# # #pprint(get_parentpage_details(notion, "fef2fef2572d4b65a765f65aa57db72f"))
-# # create_new_page(notion, plainpageid, en)
-
-# encryptid = "897f6972911c4534af16b363f764023d"
-# b = get_children_blocks(notion, encryptid)
-# de = decryptcontent(b)
-# create_new_page(notion, encryptid, de)
