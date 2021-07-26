@@ -3,6 +3,8 @@ from urllib.parse import urlparse
 from uuid import UUID
 import functools
 
+from cryptography.fernet import InvalidToken
+
 
 UNSUPPORTED_BLOCKTYPES = ["unsupported", "child_page"]
 
@@ -122,6 +124,7 @@ def decryptcontent(blocks, fernetobject):
                 try:
                     plaincontent = fernetobject.decrypt(encryptedcontent.encode("utf-8"))
                 except InvalidToken:
+                    print(plaincontent)
                     raise
                 richtextobjects["text"]["content"] = plaincontent.decode()
         
