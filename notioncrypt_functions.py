@@ -4,6 +4,8 @@ from uuid import UUID
 import functools
 
 
+UNSUPPORTED_BLOCKTYPES = ["unsupported", "child_page"]
+
 
 def get_url(object_id: str) -> str:
     """Return the URL for the object with the given id."""
@@ -76,7 +78,7 @@ def get_children_blocks(client, blockid, recursive=True):
         for block in children:
             if block["has_children"]:
                 blocktype = block["type"]
-                block[blocktype]["children"] = getchildren(client, block["id"])
+                block[blocktype]["children"] = get_children_blocks(client, block["id"])
     return children
 
 
@@ -92,22 +94,28 @@ def encryptcontent(blocks, fernetobject):
     """
     for block in blocks:
         blocktype = block["type"]
-        for richtextobjects in block[blocktype]["text"]:
-            if richtextobjects["type"] == "text":
-                plaincontent = richtextobjects["text"]["content"]
-                encryptedcontent = fernetobject.encrypt(plaincontent.encode("utf-8"))
-                richtextobjects["text"]["content"] = encryptedcontent.decode()
+        print(blocktype)
+        if blocktype in UNSUPPORTED_BLOCKTYPES:
+            raise UnsupportedBlockError
+        else:
+            for richtextobjects in block[blocktype]["text"]:
+                if richtextobjects["type"] == "text":
+                    plaincontent = richtextobjects["text"]["content"]
+                    encryptedcontent = fernetobject.encrypt(plaincontent.encode("utf-8"))
+                    richtextobjects["text"]["content"] = encryptedcontent.decode()
 
-        if block["has_children"]:
-            block[blocktype]["children"] = encryptcontent(block[blocktype]["children"])
-
-
+            if block["has_children"]:
+                block[blocktype]["children"] = encryptcontent(block[blocktype]["children"], 
+                                                        fernetobject
+                                                    )
     return blocks
 
 
 def decryptcontent(blocks, fernetobject):
     for block in blocks:
         blocktype = block["type"]
+        if blocktype in UNSUPPORTED_BLOCKTYPES:
+            raise UnsupportedBlockError
         for richtextobjects in block[blocktype]["text"]:
             if richtextobjects["type"] == "text":
                 encryptedcontent = richtextobjects["text"]["content"]
@@ -118,7 +126,18 @@ def decryptcontent(blocks, fernetobject):
                 richtextobjects["text"]["content"] = plaincontent.decode()
         
         if block["has_children"]:
-            block[blocktype]["children"] = decryptcontent(block[blocktype]["children"])
-
-
+            block[blocktype]["children"] = decryptcontent(block[blocktype]["children"],
+                                                    fernetobject
+                                                )
     return blocks
+
+
+# Custom Exceptions
+
+class UnsupportedBlockError(Exception):
+    """ error for when an unsupported block is encountered"""
+
+    def __init__(self, msg="Only Textlike Blocks are currently allowed"):
+        self.message = msg
+        super().__init__(self.message)
+

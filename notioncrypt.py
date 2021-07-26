@@ -6,7 +6,7 @@ from notion_client import Client
 from notion_client.errors import APIResponseError, APIErrorCode
 from notioncrypt_functions import (
 	get_id, get_url, get_children_blocks, encryptcontent, decryptcontent,
-	create_new_page, get_parentpage_details
+	create_new_page, get_parentpage_details, UnsupportedBlockError
 )
 
 def create_env():
@@ -87,7 +87,8 @@ def main():
 			exit()
 	except APIResponseError as error:
 		if error.code == APIErrorCode.ObjectNotFound:
-			print("Either the resource has not been shared with the integration or the resource does not exist ")
+			print("Either the resource has not been shared with the integration or the resource does not exist"
+				+ "or you passed in a database url")
 		if error.code == APIErrorCode.Unauthorized:
 			print("your notion token might be invalid")
 		if error.code == APIErrorCode.InternalServerError:
@@ -102,15 +103,19 @@ def main():
 
 
 	if response == "1":
-		modifiedblocks = encryptcontent(blocks, f)
+		try:
+			modifiedblocks = encryptcontent(blocks, f)
+		except UnsupportedBlockError:
+			print("your page contains other kind of blocks or nested pages")
+			print("Only pages that contain textlike blocks are currently supported")
+			print("Cannot Encrypt page")
+			exit()
 	if response == "2":
 		try:
 			modifiedblocks = decryptcontent(blocks, f)
-		except InvalidToken:
+		except (InvalidToken, UnsupportedBlockError):
 			print("Either the encrypted page has been modified or a different encrypt key was passed")
 			exit()
-
-
 
 	try:
 		create_new_page(notion, parentdetails, modifiedblocks)
