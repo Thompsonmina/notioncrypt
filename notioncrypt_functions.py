@@ -1,6 +1,9 @@
 from typing import Any, Dict
 from urllib.parse import urlparse
 from uuid import UUID
+import functools
+
+
 
 def get_url(object_id: str) -> str:
     """Return the URL for the object with the given id."""
@@ -12,15 +15,28 @@ def get_id(url: str) -> str:
     parsed = urlparse(url)
     if "notion.so" != parsed.netloc[-9:]:
         raise ValueError("Not a valid Notion URL.")
+    
     path = parsed.path
+    if "?" in path:
+        pos = path.index("?")
+        path = path[:pos]
+
     if len(path) < 32:
         raise ValueError("The path in the URL seems to be incorrect.")
     raw_id = path[-32:]
+    
     return str(UUID(raw_id))
 
-def get_parentpage_details(client, pageid):
+@functools.lru_cache()
+def get_parentpage_details(client, pageid: str):
+    """
+        Get the relevant meta information about the parent of a page,
+        only allow pages whose parents are also pages. Pages that belong
+        to a notion database or toplevel workspace will not be processed
+    """
+    PAGE_IDENTIFER = "page_id"
     page = client.pages.retrieve(pageid)
-    if page["parent"]["type"] == "page_id":
+    if page["parent"]["type"] == PAGE_IDENTIFER:
         parentid = page["parent"]["page_id"]
         titles = [title["text"]["content"] for title in page["properties"]["title"]["title"]]
         relevantinfo = {
@@ -36,19 +52,25 @@ def get_parentpage_details(client, pageid):
     return None 
 
 
-def create_new_page(client, plainpageID, childrenblocks):
-    if childrenblocks:
-        page_payload = get_parentpage_details(client, plainpageID)
+def create_new_page(client, parent_pagedetails, children_contentblocks):
+    """
+        Create a new page with its page contents and attach it 
+        to the parent passed
+    """
+    if children_contentblocks:
+        page_payload = parent_pagedetails
         
-        if page_payload:
-            page_payload["children"] = childrenblocks
+        if page_payload and children_contentblocks:
+            page_payload["children"] = children_contentblocks
             client.pages.create(**page_payload)
-        else:
-            raise Exception("The parent of page is unsupported, can only handle pages that have pages as parents")
-        return page_payload["parent"]["page_id"] 
 
-
+@functools.lru_cache()
 def get_children_blocks(client, blockid, recursive=True):
+    """
+        Recursively get all the contents of a block (a page is also a block).
+        all the content are also blocks that might have content of thier own
+        hence the recursion.
+    """
     children = client.blocks.children.list(blockid).get("results", [])
     if recursive:
         for block in children:
@@ -59,9 +81,15 @@ def get_children_blocks(client, blockid, recursive=True):
 
 
 def append_children_to_parentblock(client, blockid, children):
+    """ append children to a block"""
     client.blocks.children.append(blockid, **{"children":children})
 
 def encryptcontent(blocks, fernetobject):
+    """
+        recursively encrypt all the text content of text blocks
+        should ignore other types of blocks i guess 
+        todo do something about children page blocks 
+    """
     for block in blocks:
         blocktype = block["type"]
         for richtextobjects in block[blocktype]["text"]:
