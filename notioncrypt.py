@@ -14,6 +14,9 @@ from notioncrypt_functions import (
 
 from pprint import pprint
 
+
+BACKUP_DIRECTORY = "Backups"
+
 def create_env():
 	""" helper function that takes in the relevant credentials and 
 		creates a .env file 
@@ -25,7 +28,7 @@ def create_env():
 		file.write(f"ENCRYPT_KEY={key}\n")
 
 def create_encrypted_backup(parentid, encryptedblocks, page_id):
-	directory = os.path.join("Backups")
+	directory = os.path.join(BACKUP_DIRECTORY)
 	if not (os.path.exists(directory) and os.path.isdir(directory)):
 		os.mkdir(directory)
 
@@ -108,22 +111,31 @@ def main():
 			print("The bearer token used does not have permission to perform this action")
 		if error.code == APIErrorCode.ServiceUnavailable:
 			print("Notion is currently Unavailable try again")
-
 		exit()
 
-
-	# will remove from here and wrap in try blocks
-	blocks = get_children_blocks(notion, page_id)
-
 	if response == "1":
-		handle_encryption(notion, meta_pagedetails, blocks, fernetobject)
+		handle_encryption(notion, meta_pagedetails, page_id, fernetobject)
 		
 	if response == "2":
-		handle_decryption(notion, meta_pagedetails, blocks, fernetobject)
+		handle_decryption(notion, meta_pagedetails, page_id, fernetobject)
 
 	print(f"Operation successfull, check out {get_url(meta_pagedetails['parent']['page_id'])}")
 
-def handle_decryption(notion, meta_pagedetails, blocks, fernetobject):
+
+	# print(meta_pagedetails, "M")
+	# notion.pages.update(page_id, **{"archived":True})
+
+
+def handle_decryption(notion, meta_pagedetails, page_id, fernetobject):
+
+	storedpages = os.listdir(BACKUP_DIRECTORY)
+	storedpages = [page[:-5] for page in storedpages] # trims the file names of .json
+	if page_id in storedpages:
+		with open(os.path.join(BACKUP_DIRECTORY, page_id + ".json")) as file:
+			blocks = json.load(file)
+	else:
+		blocks = get_children_blocks(notion, page_id)
+
 	try:
 		modifiedblocks = decryptcontent(blocks, fernetobject)
 	except (InvalidToken, UnsupportedBlockError):
@@ -139,7 +151,14 @@ def handle_decryption(notion, meta_pagedetails, blocks, fernetobject):
 			print(error)
 		exit()
 
-def handle_encryption(notion, meta_pagedetails, blocks, fernetobject):
+def handle_encryption(notion, meta_pagedetails, page_id, fernetobject):
+
+	try:
+		blocks = get_children_blocks(notion, page_id)
+	except APIResponseError as error:
+		print(error)
+		exit()
+
 	try:
 		modifiedblocks = encryptcontent(blocks, fernetobject)
 	except UnsupportedBlockError:
@@ -157,16 +176,23 @@ def handle_encryption(notion, meta_pagedetails, blocks, fernetobject):
 			print(error)
 		exit()
 
-	time.sleep(3)
+
 	titles = [title["text"]["content"] for title in meta_pagedetails["properties"]["title"]]
 	titles = "".join(titles)
-	results = notion.search(query=titles, sort={
-				"direction":"descending",
-  				"timestamp":"last_edited_time"
-			}
-		)
-	
-	new_encryptedpage_id = results["results"][0]["id"]
+
+	new_encryptedpage_id = ""
+	while not new_encryptedpage_id:
+		results = notion.search(query=titles, sort={
+					"direction":"descending",
+	  				"timestamp":"last_edited_time"
+				}
+			)
+		
+		if results["results"][0]:
+			a_pageid = results["results"][0]["id"]
+			new_encryptedpage_id =  a_pageid if a_pageid != page_id else ""
+		print("in ze loop")
+		time.sleep(1)
 	create_encrypted_backup(notion, modifiedblocks, new_encryptedpage_id)
 
 main()
