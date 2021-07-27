@@ -32,9 +32,9 @@ def get_id(url: str) -> str:
     return str(UUID(raw_id))
 
 @functools.lru_cache()
-def get_parentpage_details(client, pageid: str):
+def get_meta_details(client, pageid: str):
     """
-        Get the relevant meta information about the parent of a page,
+        Get the relevant meta information about page,
         only allow pages whose parents are also pages. Pages that belong
         to a notion database or toplevel workspace will not be processed
     """
@@ -56,13 +56,13 @@ def get_parentpage_details(client, pageid: str):
     return None 
 
 
-def create_new_page(client, parent_pagedetails, children_contentblocks):
+def create_new_page(client, meta_pagedetails, children_contentblocks):
     """
         Create a new page with its page contents and attach it 
         to the parent passed
     """
     if children_contentblocks:
-        page_payload = parent_pagedetails
+        page_payload = meta_pagedetails
         
         if page_payload and children_contentblocks:
             page_payload["children"] = children_contentblocks
@@ -112,7 +112,6 @@ def encryptcontent(blocks, fernetobject):
                                                     )
     return blocks
 
-
 def decryptcontent(blocks, fernetobject):
     for block in blocks:
         blocktype = block["type"]
@@ -133,6 +132,7 @@ def decryptcontent(blocks, fernetobject):
                                                     fernetobject
                                                 )
     return blocks
+
 
 
 # Custom Exceptions
