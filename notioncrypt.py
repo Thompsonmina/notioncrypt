@@ -12,8 +12,8 @@ from notioncrypt_functions import (
 	create_new_page, get_meta_details, UnsupportedBlockError
 )
 
-
 from pprint import pprint
+
 def create_env():
 	""" helper function that takes in the relevant credentials and 
 		creates a .env file 
@@ -29,8 +29,8 @@ def create_encrypted_backup(parentid, encryptedblocks, page_id):
 	if not (os.path.exists(directory) and os.path.isdir(directory)):
 		os.mkdir(directory)
 
-	with open(os.path.join(directory, page_id), "w") as file:
-		json.dump(encryptedblocks, file, indent=3)
+	with open(os.path.join(directory, page_id + ".json"), "w") as file:
+		json.dump(encryptedblocks, file, indent=1)
 
 def main():
 
@@ -68,7 +68,7 @@ def main():
 		exit()
 
 	notion = Client(auth=token)
-	f = Fernet(key)
+	fernetobject = Fernet(key)
 
 	print("Encrypt a Notion Page: Select 1")
 	print("Decrypt an Encrypted Notion Page: Select 2")
@@ -112,48 +112,62 @@ def main():
 		exit()
 
 
-	# will remove from here
+	# will remove from here and wrap in try blocks
 	blocks = get_children_blocks(notion, page_id)
 
 	if response == "1":
-		try:
-			modifiedblocks = encryptcontent(blocks, f)
-		except UnsupportedBlockError:
-			print("your page contains other kind of blocks or embedded pages")
-			print("Only pages that contain textlike blocks are currently supported")
-			print("Cannot Encrypt page")
-			exit()
+		handle_encryption(notion, meta_pagedetails, blocks, fernetobject)
+		
 	if response == "2":
-		try:
-			modifiedblocks = decryptcontent(blocks, f)
-		except (InvalidToken, UnsupportedBlockError):
-			print("Either the encrypted page has been modified or a different encrypt key was passed")
-			exit()
+		handle_decryption(notion, meta_pagedetails, blocks, fernetobject)
+
+	print(f"Operation successfull, check out {get_url(meta_pagedetails['parent']['page_id'])}")
+
+def handle_decryption(notion, meta_pagedetails, blocks, fernetobject):
+	try:
+		modifiedblocks = decryptcontent(blocks, fernetobject)
+	except (InvalidToken, UnsupportedBlockError):
+		print("Either the encrypted page has been modified or a different encrypt key was passed")
+		exit()
 
 	try:
 		create_new_page(notion, meta_pagedetails, modifiedblocks)
 	except APIResponseError as error:
 		if error.code == APIErrorCode.ObjectNotFound:
-			print("the integration does not have access to the parent of this integration")
+			print("the integration does not have access to the parent of this page")
 		else:
 			print(error)
 		exit()
 
-	if response == "1":
-		time.sleep(3)
-		titles = [title["text"]["content"] for title in meta_pagedetails["properties"]["title"]]
-		titles = "".join(titles)
-		results = notion.search(query=titles, sort={
-					"direction":"descending",
-      				"timestamp":"last_edited_time"
-				}
-			)
-		
-		new_encryptedpage_id = results["results"][0]["id"]
-		create_encrypted_backup(notion, modifiedblocks, new_encryptedpage_id)
+def handle_encryption(notion, meta_pagedetails, blocks, fernetobject):
+	try:
+		modifiedblocks = encryptcontent(blocks, fernetobject)
+	except UnsupportedBlockError:
+		print("your page contains other kind of blocks or embedded pages")
+		print("Only pages that contain textlike blocks are currently supported")
+		print("Cannot Encrypt page")
+		exit()
 
+	try:
+		create_new_page(notion, meta_pagedetails, modifiedblocks)
+	except APIResponseError as error:
+		if error.code == APIErrorCode.ObjectNotFound:
+			print("the integration does not have access to the parent of this page")
+		else:
+			print(error)
+		exit()
 
-	print(f"Operation successfull, check out {get_url(meta_pagedetails['parent']['page_id'])}")
+	time.sleep(3)
+	titles = [title["text"]["content"] for title in meta_pagedetails["properties"]["title"]]
+	titles = "".join(titles)
+	results = notion.search(query=titles, sort={
+				"direction":"descending",
+  				"timestamp":"last_edited_time"
+			}
+		)
+	
+	new_encryptedpage_id = results["results"][0]["id"]
+	create_encrypted_backup(notion, modifiedblocks, new_encryptedpage_id)
 
 main()
 #create_encrypted_backup(2,4)

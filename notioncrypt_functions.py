@@ -96,7 +96,6 @@ def encryptcontent(blocks, fernetobject):
     """
     for block in blocks:
         blocktype = block["type"]
-        print(blocktype)
         if blocktype in UNSUPPORTED_BLOCKTYPES:
             raise UnsupportedBlockError
         else:
@@ -106,10 +105,13 @@ def encryptcontent(blocks, fernetobject):
                     encryptedcontent = fernetobject.encrypt(plaincontent.encode("utf-8"))
                     richtextobjects["text"]["content"] = encryptedcontent.decode()
 
+                # remove the plain text attribute as it is a duplicate of content but isnt encrypted
+                richtextobjects.pop("plain_text", "")
             if block["has_children"]:
                 block[blocktype]["children"] = encryptcontent(block[blocktype]["children"], 
                                                         fernetobject
                                                     )
+        block[blocktype]["text"]
     return blocks
 
 def decryptcontent(blocks, fernetobject):
@@ -123,7 +125,6 @@ def decryptcontent(blocks, fernetobject):
                 try:
                     plaincontent = fernetobject.decrypt(encryptedcontent.encode("utf-8"))
                 except InvalidToken:
-                    print(plaincontent)
                     raise
                 richtextobjects["text"]["content"] = plaincontent.decode()
         
