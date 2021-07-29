@@ -1,25 +1,23 @@
-from typing import Any, Dict
 from urllib.parse import urlparse
 from uuid import UUID
-import functools
 
 from cryptography.fernet import InvalidToken
-
 
 UNSUPPORTED_BLOCKTYPES = ["unsupported", "child_page"]
 
 
-def get_url(object_id: str) -> str:
+def get_url(object_id):
     """Return the URL for the object with the given id."""
     return "https://notion.so/" + UUID(object_id).hex
 
-
-def get_id(url: str) -> str:
+def get_id(url):
     """Return the id of the object behind the given URL."""
+
     parsed = urlparse(url)
     if "notion.so" != parsed.netloc[-9:]:
         raise ValueError("Not a valid Notion URL.")
     
+    # remove args from link
     path = parsed.path
     if "?" in path:
         pos = path.index("?")
@@ -31,12 +29,15 @@ def get_id(url: str) -> str:
     
     return str(UUID(raw_id))
 
-@functools.lru_cache()
-def get_meta_details(client, pageid: str):
+def get_meta_details(client, pageid):
     """
         Get the relevant meta information about page,
         only allow pages whose parents are also pages. Pages that belong
         to a notion database or toplevel workspace will not be processed
+
+        returns:
+        Either a dictionary containing relevant meta details of a page
+        or None if the page isnt a child of a page
     """
     PAGE_IDENTIFER = "page_id"
     page = client.pages.retrieve(pageid)
@@ -62,20 +63,21 @@ def create_new_page(client, meta_pagedetails, children_contentblocks):
         to the parent passed
     """
     if children_contentblocks:
-        page_payload = meta_pagedetails
+        page_payload = dict(meta_pagedetails)
         
         if page_payload and children_contentblocks:
             page_payload["children"] = children_contentblocks
             client.pages.create(**page_payload)
 
-@functools.lru_cache()
 def get_children_blocks(client, blockid, recursive=True):
     """
         Recursively get all the contents of a block (a page is also a block).
         all the content are also blocks that might have content of thier own
         hence the recursion.
     """
-    children = client.blocks.children.list(blockid).get("results", [])
+    listobject = client.blocks.children.list(blockid)
+    children = listobject.pop("results", [])
+    print(listobject)
     if recursive:
         for block in children:
             if block["has_children"]:
@@ -83,17 +85,20 @@ def get_children_blocks(client, blockid, recursive=True):
                 block[blocktype]["children"] = get_children_blocks(client, block["id"])
     return children
 
-
 def append_children_to_parentblock(client, blockid, children):
     """ append children to a block"""
     client.blocks.children.append(blockid, **{"children":children})
 
 def encryptcontent(blocks, fernetobject):
     """
-        recursively encrypt all the text content of text blocks
-        should ignore other types of blocks i guess 
-        todo do something about children page blocks 
+        recursively encrypts all the text content of text blocks
+
+        returns a list of encrypted blocks
+
+        Exceptions:
+            raises an UnsupportedBlockError if any of the blocks passed arent textlike
     """
+    blocks = list(blocks)
     for block in blocks:
         blocktype = block["type"]
         if blocktype in UNSUPPORTED_BLOCKTYPES:
@@ -115,6 +120,15 @@ def encryptcontent(blocks, fernetobject):
     return blocks
 
 def decryptcontent(blocks, fernetobject):
+    """
+        recursively decrypts all the text content of textlike blocks
+
+        returns a list of decrypted blocks
+
+        Exceptions:
+            raises an UnsupportedBlockError if any of the blocks passed arent textlike
+            raises an Invalid Token Error if the blocks passed cannot be decrypted
+    """
     for block in blocks:
         blocktype = block["type"]
         if blocktype in UNSUPPORTED_BLOCKTYPES:
@@ -135,9 +149,7 @@ def decryptcontent(blocks, fernetobject):
     return blocks
 
 
-
-# Custom Exceptions
-
+# Custom Exception
 class UnsupportedBlockError(Exception):
     """ error for when an unsupported block is encountered"""
 
