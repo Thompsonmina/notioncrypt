@@ -22,43 +22,15 @@ BACKUP_DIRECTORY = "Backups"
 print_error = lambda msg: print(Fore.RED + msg)
 	
 
-def create_env():
-	""" helper function that takes in the relevant credentials and 
-		creates a .env file 
-	"""
-	token = input("NOTION_TOKEN: ")
-	key = input("ENCRYPT_KEY: ")
-	with open(".env", "w") as file:
-		file.write(f"NOTION_TOKEN={token}\n")
-		file.write(f"ENCRYPT_KEY={key}\n")
-
-def create_encrypted_backup(encryptedblocks, page_id):
-	"""
-		Creates back ups of encrypted pages stored as json files with the page id as 
-		its filename
-	"""
-	#create a new directory where backups will be stored if it doesn't already exist
-	directory = os.path.join(BACKUP_DIRECTORY)
-	if not (os.path.exists(directory) and os.path.isdir(directory)):
-		os.mkdir(directory)
-
-	with open(os.path.join(directory, page_id + ".json"), "w") as file:
-		json.dump(encryptedblocks, file, indent=1)
-
-def destroy_encrypted_backup(page_id):
-	"""
-		removes a stored encrypted page from file system
-	"""
-	path_to_file = f"{BACKUP_DIRECTORY}/{page_id}.json"
-	if os.path.isfile(path_to_file):
-		os.remove(path_to_file)
-
-
 def main():
 	""" Handles the main user facing logic"""
 
+	response = url = ""
 	# check if extra arguments are passed when running the script
-	if sys.argv[1:]:
+	if len(sys.argv[1:]) == 2 and sys.argv[1] in ["encrypt", "decrypt"]:
+		response, url = sys.argv[1], sys.arv[2]
+
+	elif sys.argv[1:]:
 		if sys.argv[1] == "generate_key" and not sys.argv[2:]:
 			print(Fore.YELLOW + "warning if you lose your key you will not be able to decrypt your pages")
 			print(f"key: '{Fernet.generate_key().decode()}'")
@@ -74,10 +46,10 @@ def main():
 			"\tpython notioncrypt.py create_env: to create a .env file with valid credentials"
 			)
 			exit()
-		else:
-			print(f"Unknown option: {' '.join(sys.argv[1:])}")
-			print("try python notioncrypt.py help for relevant options")
-			exit()
+	else:
+		print(f"Unknown option: {' '.join(sys.argv[1:])}")
+		print("try python notioncrypt.py help for relevant options")
+		exit()
 
 
 	token = config("NOTION_TOKEN", default=None)
@@ -93,13 +65,9 @@ def main():
 	notion = Client(auth=token)
 	fernetobject = Fernet(key)
 
-	print("Encrypt a Notion Page: Select 1")
-	print("Decrypt an Encrypted Notion Page: Select 2")
+	# validate url
 
-	# ensure user passes in a valid response
-	while True:
-		response = input("->")
-		if response not in ["1", "2"]:
+	if response not in ["1", "2"]:
 			print("invalid response") 
 		else:
 			break
@@ -131,14 +99,14 @@ def main():
 		if error.code == APIErrorCode.ServiceUnavailable:
 			print_error("Notion is currently Unavailable try again")
 		exit()
-	else:
-		# check to see if meta_info is exists
-		# if it doesn't exist, an unsupported type of notion page was passed
-		# only pages that have pages as parents are valid
-		if not meta_pagedetails:
-			print("page passed has a database parent or is a workspace level page")
-			print("Only pages that have a page as a parent is currently supported")
-			exit()
+	
+	# check to see if meta_info exists
+	# if it doesn't exist, an unsupported type of notion page was passed
+	# only pages that have pages as parents are valid
+	if not meta_pagedetails:
+		print("page passed has a database parent or is a workspace level page")
+		print("Only pages that have a page as a parent is currently supported")
+		exit()
 
 	if response == "1":
 		print(Fore.GREEN + "encrypting page...")
@@ -248,6 +216,38 @@ def handle_encryption(notion, meta_pagedetails, page_id, fernetobject):
 	# create a backup of the newly encrypted page using its id as the filename
 	create_encrypted_backup(modifiedblocks, new_encryptedpage_id)
 
+
+
+def create_env():
+	""" helper function that takes in the relevant credentials and 
+		creates a .env file 
+	"""
+	token = input("NOTION_TOKEN: ")
+	key = input("ENCRYPT_KEY: ")
+	with open(".env", "w") as file:
+		file.write(f"NOTION_TOKEN={token}\n")
+		file.write(f"ENCRYPT_KEY={key}\n")
+
+def create_encrypted_backup(encryptedblocks, page_id):
+	"""
+		Creates back ups of encrypted pages stored as json files with the page id as 
+		its filename
+	"""
+	#create a new directory where backups will be stored if it doesn't already exist
+	directory = os.path.join(BACKUP_DIRECTORY)
+	if not (os.path.exists(directory) and os.path.isdir(directory)):
+		os.mkdir(directory)
+
+	with open(os.path.join(directory, page_id + ".json"), "w") as file:
+		json.dump(encryptedblocks, file, indent=1)
+
+def destroy_encrypted_backup(page_id):
+	"""
+		removes a stored encrypted page from file system
+	"""
+	path_to_file = f"{BACKUP_DIRECTORY}/{page_id}.json"
+	if os.path.isfile(path_to_file):
+		os.remove(path_to_file)
 
 if __name__ == "__main__":
 	main()
