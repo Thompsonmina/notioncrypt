@@ -25,23 +25,26 @@ print_error = lambda msg: print(Fore.RED + msg)
 def main():
 	""" Handles the main user facing logic"""
 
-	response = url = ""
+	MAIN_ARGS = ["encrypt", "decrypt"]
+	HELPER_ARGS = ["generate_key", "create_env", "help"]
+	
+	response = page_url = ""
 	# check if extra arguments are passed when running the script
-	if len(sys.argv[1:]) == 2 and sys.argv[1] in ["encrypt", "decrypt"]:
-		response, url = sys.argv[1], sys.arv[2]
-
-	elif sys.argv[1:]:
-		if sys.argv[1] == "generate_key" and not sys.argv[2:]:
+	if len(sys.argv[1:]) == 2 and sys.argv[1] in MAIN_ARGS:
+		response, page_url = sys.argv[1], sys.argv[2]
+	elif len(sys.argv[1:]) == 1 and sys.argv[1] in HELPER_ARGS:
+		if sys.argv[1] == "generate_key":
 			print(Fore.YELLOW + "warning if you lose your key you will not be able to decrypt your pages")
 			print(f"key: '{Fernet.generate_key().decode()}'")
 			exit()
-		if sys.argv[1] == "create_env" and not sys.argv[2:]:
+		if sys.argv[1] == "create_env":
 			create_env()
 			exit()
-		if sys.argv[1] == "help" and not sys.argv[2:]:
+		if sys.argv[1] == "help":
 			print(
 			"valid options:\n" +
-			"\tpython notioncrypt.py : to run the program\n" +
+			"\tpython notioncrypt.py encrypt <plain_notion_url>: to encrypt a page\n" +
+			"\tpython notioncrypt.py decrypt <encrypted_notion_url>: to decrypt a page\n" +
 			"\tpython notioncrypt.py generate_key: to generate a valid fernet key\n" +
 			"\tpython notioncrypt.py create_env: to create a .env file with valid credentials"
 			)
@@ -50,7 +53,6 @@ def main():
 		print(f"Unknown option: {' '.join(sys.argv[1:])}")
 		print("try python notioncrypt.py help for relevant options")
 		exit()
-
 
 	token = config("NOTION_TOKEN", default=None)
 	key = config("ENCRYPT_KEY", default=None)
@@ -67,20 +69,12 @@ def main():
 
 	# validate url
 
-	if response not in ["1", "2"]:
-			print("invalid response") 
-		else:
-			break
-
 	# ensure user passes in a valid notion url
-	while True:
-		print("Enter the link of the page: ", end="")
-		page_url = input()
-		try:
-			page_id = get_id(page_url)
-			break
-		except ValueError as v:
-			print(f"{v}")
+	try:
+		page_id = get_id(page_url)
+	except ValueError as v:
+		print_error(f"{v}")
+		exit()
 
 	# Try to establish an initial connection to user's workspace 
 	try:
@@ -108,11 +102,11 @@ def main():
 		print("Only pages that have a page as a parent is currently supported")
 		exit()
 
-	if response == "1":
+	if response == "encrypt":
 		print(Fore.GREEN + "encrypting page...")
 		handle_encryption(notion, meta_pagedetails, page_id, fernetobject)
 		
-	if response == "2":
+	if response == "decrypt":
 		print(Fore.GREEN + "decrypting page...")
 		handle_decryption(notion, meta_pagedetails, page_id, fernetobject)
 
@@ -176,7 +170,6 @@ def handle_encryption(notion, meta_pagedetails, page_id, fernetobject):
 	"""
 	
 	blocks = get_children_blocks(notion, page_id)
-	create_encrypted_backup(blocks, "long")
 
 	try:
 		modifiedblocks = encryptcontent(blocks, fernetobject)

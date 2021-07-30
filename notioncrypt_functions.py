@@ -77,7 +77,7 @@ def get_children_blocks(client, blockid, recursive=True):
     """
     listobject = client.blocks.children.list(blockid)
     children = listobject.pop("results", [])
-    print(listobject)
+    #print(listobject)
     if recursive:
         for block in children:
             if block["has_children"]:
