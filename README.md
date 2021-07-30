@@ -1,5 +1,5 @@
 
-# notion_crypt
+# notioncrypt
 
 
 A script that encrypts and decrypts your notion pages.
@@ -16,8 +16,8 @@ A script that encrypts and decrypts your notion pages.
 - Clone the repo
 
     ```shell
-    git clone https://github.com/RinwaOwuogba/talentql-assessment.git
-    cd notion_crypt
+    git clone https://github.com/Thompsonmina/notioncrypt
+    cd notioncrypt
     ```
 - Create a virtual env and activate it
     ```
