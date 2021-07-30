@@ -68,6 +68,6 @@ python notioncrypt.py decrypt <notion_page_url>
 ## Caveats
 The notion api is still in beta and is not fully featured yet.
 
-For now you can only encrypt or decrypt pages:
-- that have a another page as a parent (top level pages and pages that belong to a database are not supported yet)
+For now you can only encrypt or decrypt:
+- pages that have a another page as a parent (top level pages and pages that belong to a database are not supported yet)
 - pages that contain only [text-like blocks](https://developers.notion.com/reference/block)
