@@ -1,6 +1,7 @@
 import sys
 import os
 import json
+from base64 import binascii
 
 from colorama import init, Fore
 from cryptography.fernet import Fernet, InvalidToken
@@ -65,10 +66,15 @@ def main():
 		exit()
 
 	notion = Client(auth=token)
-	fernetobject = Fernet(key)
+
+	# ensure that a good key was passed
+	try:
+		fernetobject = Fernet(key)
+	except binascii.Error:
+		print_error("passed in an unsafe key, use the generate_key command to create a safe key") 
+		exit()
 
 	# validate url
-
 	# ensure user passes in a valid notion url
 	try:
 		page_id = get_id(page_url)
