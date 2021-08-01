@@ -69,20 +69,34 @@ def create_new_page(client, meta_pagedetails, children_contentblocks):
             page_payload["children"] = children_contentblocks
             client.pages.create(**page_payload)
 
-def get_children_blocks(client, blockid, recursive=True):
+def get_children_blocks(client, blockid):
     """
         Recursively get all the contents of a block (a page is also a block).
         all the content are also blocks that might have content of thier own
         hence the recursion.
     """
-    listobject = client.blocks.children.list(blockid)
-    children = listobject.pop("results", [])
-    #print(listobject)
-    if recursive:
-        for block in children:
-            if block["has_children"]:
-                blocktype = block["type"]
-                block[blocktype]["children"] = get_children_blocks(client, block["id"])
+    # get the inital set of objects (limit of 100 blocks)
+    partiallist = client.blocks.children.list(blockid)
+    has_more = partiallist.pop("has_more", False)
+    next_cursor = partiallist.pop("next_cursor", "")
+    children = partiallist.pop("results", [])
+
+    # get the remaining blocks if they exist
+    while has_more:
+        partiallist = client.blocks.children.list(blockid, start_cursor=next_cursor)
+        has_more = partiallist.pop("has_more", False)
+        next_cursor = partiallist.pop("next_cursor", "")
+        otherchildren = partiallist.pop("results", [])
+
+        children += otherchildren
+
+    print([child["type"] for child in children])
+
+    # recursively get every single sub block
+    for block in children:
+        if block["has_children"]:
+            blocktype = block["type"]
+            block[blocktype]["children"] = get_children_blocks(client, block["id"])
     return children
 
 def append_children_to_parentblock(client, blockid, children):
