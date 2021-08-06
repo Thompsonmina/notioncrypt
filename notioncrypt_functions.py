@@ -89,9 +89,7 @@ def get_children_blocks(client, blockid):
         otherchildren = partiallist.pop("results", [])
 
         children += otherchildren
-
-    print([child["type"] for child in children])
-
+        
     # recursively get every single sub block
     for block in children:
         if block["has_children"]:
